@@ -1,6 +1,6 @@
+import numpy as np
+from PIL import Image
 import random
-import json
-from PIL import Image, ImageDraw
 
 # Define the color schemes table with actual colors
 color_schemes_table = {
@@ -10,7 +10,8 @@ color_schemes_table = {
     'Sp': ['Base Color', 'Split-Complementary Color'],
     'Tri': ['Base Color', 'Triadic Color'],
     'Sq': ['Base Color', 'Square Color'],
-    'Rect': ['Base Color', 'Rectangular Color']
+    'Rect': ['Base Color', 'Rectangular Color'],
+    'Non': ['Base Color']  # Non-standard color scheme
 }
 
 # Populate the color schemes table with actual colors
@@ -30,55 +31,31 @@ color_schemes_table['Tri'].extend([base_color, triadic_color])
 color_schemes_table['Sq'].extend([base_color, square_color])
 color_schemes_table['Rect'].extend([base_color, rectangular_color])
 
-# Function to generate a random color curve
-def generate_random_curve(color_schemes_table):
-    # Placeholder for code to generate a random color curve
-    random_color_curve = {
-        'ColorScheme': random.choice(list(color_schemes_table.keys())),
-        'Complexity': random.randint(1, 5),
-        'CurveData': {
-            'floatCurves': [
-                {
-                    'keys': [{'time': random.uniform(0, 1), 'value': random.uniform(0, 1)} for _ in range(10)]
-                }
-            ]
-        }
-    }
-    return random_color_curve
+def create_color_channel_images(color_schemes_table):
+    # Image dimensions
+    texture_width, texture_height = 256, 256
 
-# Generate a random color curve
-random_color_curve = generate_random_curve(color_schemes_table)
-color_scheme = random_color_curve['ColorScheme']
-complexity = random_color_curve['Complexity']
+    # Initialize an empty dictionary to store the images
+    color_images = {}
 
-# Create a PNG file to visualize the color curve using Pillow
-width, height = 800, 600
-image = Image.new('RGB', (width, height), 'white')
-draw = ImageDraw.Draw(image)
-points = [(int(key['time'] * width), int(key['value'] * height)) for key in random_color_curve['CurveData']['floatCurves'][0]['keys']]
+    for color_scheme, colors in color_schemes_table.items():
+        # Create an empty image for the color scheme
+        color_image = np.zeros((texture_height, texture_width, 4), dtype=np.uint8)
 
-# Ensure the color scheme has the required number of color elements
-color_data = color_schemes_table.get(color_scheme)
+        # Generate colors based on the color scheme data
+        for x in range(texture_width):
+            base_color = colors[1]  # Base color at index 1
+            color_value = int((x / texture_width) * 255)
+            color_image[:, x] = [int(channel * 255) if index < 3 else 255 for index, channel in enumerate(base_color)]
 
-if color_data and len(color_data) > 1:
-    rgb_color_data = color_data[1][:3]  # Take only the first 3 elements for RGB
+        # Convert the numpy array to an image
+        color_img = Image.fromarray(color_image, 'RGBA')
+        color_images[color_scheme] = color_img
 
-    try:
-        # Convert the color data to integers for visualization
-        visualization_color = tuple(int(255 * channel) for channel in rgb_color_data)
+        # Save the image with the color scheme name
+        color_img.save(f'color_curve_texture_{color_scheme.lower()}_channel.png')
 
-    except (ValueError, TypeError):
-        # Fallback color in case of invalid RGB data
-        visualization_color = (255, 0, 0)  # Red color as fallback
+    print("Color channel images for the specified color schemes have been created and saved.")
 
-    # Visualize the color curve using the converted color
-    draw.line(points, fill=visualization_color, width=2)
-
-    # Save the image to a file with the corrected naming convention
-    image_filename = f"CC_karin_{color_scheme}.png"
-    image.save(image_filename)
-
-    print(f"Created color curve visualization and saved as '{image_filename}'.")
-else:
-    print(f"Error: Color data not available for the selected color scheme '{color_scheme}'. Please check the color schemes table.")
-    
+# Call the function to create and save the images based on the color schemes table
+create_color_channel_images(color_schemes_table)

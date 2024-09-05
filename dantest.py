@@ -5,6 +5,11 @@ from PIL import Image
 # Threshold for treating very small values as zero
 EPSILON = 1e-6
 
+# Function to remap a value range
+def remap(values, old_min, old_max, new_min, new_max):
+    """Remap the values from the old range to a new range."""
+    return (values - old_min) / (old_max - old_min) * (new_max - new_min) + new_min
+
 def fetch_and_process_color_curve(source=None, is_api=True):
     """
     Fetch color curve data from API or use provided data, then process it.
@@ -74,6 +79,11 @@ def fetch_and_process_color_curve(source=None, is_api=True):
             alpha_times, alpha_values = extract_curve_data(float_curves[3]['keys'])
             alpha_normalized = np.interp(np.linspace(0, 1, texture_width), alpha_times, alpha_values)
 
+            # Remap alpha values to [0, 255] to handle negative alpha values
+            min_alpha = min(alpha_normalized)
+            max_alpha = max(alpha_normalized)
+            alpha_remapped = remap(alpha_normalized, min_alpha, max_alpha, 0, 255)
+
         except IndexError as e:
             print(f"Error processing Curve ID {curve_id}: {str(e)}")
             continue
@@ -86,7 +96,7 @@ def fetch_and_process_color_curve(source=None, is_api=True):
             combined_image[:, x, 0] = int(red_normalized[x] * 255)    # Red channel
             combined_image[:, x, 1] = int(green_normalized[x] * 255)  # Green channel
             combined_image[:, x, 2] = int(blue_normalized[x] * 255)   # Blue channel
-            combined_image[:, x, 3] = int(alpha_normalized[x] * 255)  # Alpha channel
+            combined_image[:, x, 3] = int(alpha_remapped[x])          # Remapped Alpha channel
 
         # Convert numpy array to image
         combined_img = Image.fromarray(combined_image, 'RGBA')
