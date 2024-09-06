@@ -1,61 +1,68 @@
-import numpy as np
-from PIL import Image
-import random
+import os
+import json
 
-# Define the color schemes table with actual colors
-color_schemes_table = {
-    'Mono': ['Base Color'],
-    'Ana': ['Base Color', 'Analogous Color'],
-    'Comp': ['Base Color', 'Complementary Color'],
-    'Sp': ['Base Color', 'Split-Complementary Color'],
-    'Tri': ['Base Color', 'Triadic Color'],
-    'Sq': ['Base Color', 'Square Color'],
-    'Rect': ['Base Color', 'Rectangular Color'],
-    'Non': ['Base Color']  # Non-standard color scheme
-}
+def generate_sql_from_json(input_folder_path, output_sql_file, cross_ref_sql_file):
+    # Get list of JSON files in the input folder
+    json_files = [f for f in os.listdir(input_folder_path) if f.endswith('.json')]
 
-# Populate the color schemes table with actual colors
-base_color = (0.2, 0.4, 0.6)  # Base color in RGB
-analogous_color = (0.2, 0.5, 0.6)  # Analogous color
-complementary_color = (0.8, 0.6, 0.4)  # Complementary color
-split_complementary_color = (0.2, 0.6, 0.7)  # Split-Complementary color
-triadic_color = (0.3, 0.4, 0.6)  # Triadic color
-square_color = (0.2, 0.5, 0.7)  # Square color
-rectangular_color = (0.3, 0.5, 0.6)  # Rectangular color
+    with open(output_sql_file, 'w') as sql_file, open(cross_ref_sql_file, 'w') as cross_ref_file:
+        # Write the header for the SQL file (for the main Color_Curves table)
+        sql_file.write("INSERT INTO Color_Curves (curve_id, curve_json)\nVALUES\n")
 
-color_schemes_table['Mono'].append(base_color)
-color_schemes_table['Ana'].extend([base_color, analogous_color])
-color_schemes_table['Comp'].extend([base_color, complementary_color])
-color_schemes_table['Sp'].extend([base_color, split_complementary_color])
-color_schemes_table['Tri'].extend([base_color, triadic_color])
-color_schemes_table['Sq'].extend([base_color, square_color])
-color_schemes_table['Rect'].extend([base_color, rectangular_color])
+        # Write the header for the cross-reference file (for the Curve_File_Map table)
+        cross_ref_file.write("INSERT INTO Curve_File_Map (curve_id, filename)\nVALUES\n")
 
-def create_color_channel_images(color_schemes_table):
-    # Image dimensions
-    texture_width, texture_height = 256, 256
+        # Track if this is the first row for both tables
+        first_row_main = True
+        first_row_cross_ref = True
 
-    # Initialize an empty dictionary to store the images
-    color_images = {}
+        # Loop through each JSON file and use an index as the curve_id
+        for index, json_file in enumerate(json_files, start=1):  # 'start=1' to begin the index at 1
+            curve_id = index  # Use the index as the curve_id
+            json_path = os.path.join(input_folder_path, json_file)
 
-    for color_scheme, colors in color_schemes_table.items():
-        # Create an empty image for the color scheme
-        color_image = np.zeros((texture_height, texture_width, 4), dtype=np.uint8)
+            # Read and parse JSON data
+            with open(json_path, 'r') as file:
+                try:
+                    curve_json = json.load(file)
+                except json.JSONDecodeError:
+                    print(f"Error decoding JSON from file {json_file}")
+                    continue
 
-        # Generate colors based on the color scheme data
-        for x in range(texture_width):
-            base_color = colors[1]  # Base color at index 1
-            color_value = int((x / texture_width) * 255)
-            color_image[:, x] = [int(channel * 255) if index < 3 else 255 for index, channel in enumerate(base_color)]
+            # Convert Python object to a JSON string for SQL
+            curve_json_str = json.dumps(curve_json).replace("'", "''")
 
-        # Convert the numpy array to an image
-        color_img = Image.fromarray(color_image, 'RGBA')
-        color_images[color_scheme] = color_img
+            # Format the INSERT statement for the main table (Color_Curves)
+            value_str_main = f"({curve_id}, '{curve_json_str}')"
 
-        # Save the image with the color scheme name
-        color_img.save(f'color_curve_texture_{color_scheme.lower()}_channel.png')
+            # Write the SQL INSERT command for the main table
+            if first_row_main:
+                sql_file.write(value_str_main)
+                first_row_main = False
+            else:
+                sql_file.write(",\n" + value_str_main)
 
-    print("Color channel images for the specified color schemes have been created and saved.")
+            # Format the INSERT statement for the cross-reference table (Curve_File_Map)
+            value_str_cross_ref = f"({curve_id}, '{json_file}')"
 
-# Call the function to create and save the images based on the color schemes table
-create_color_channel_images(color_schemes_table)
+            # Write the SQL INSERT command for the cross-reference table
+            if first_row_cross_ref:
+                cross_ref_file.write(value_str_cross_ref)
+                first_row_cross_ref = False
+            else:
+                cross_ref_file.write(",\n" + value_str_cross_ref)
+
+        # End both SQL statements
+        sql_file.write(";\n")
+        cross_ref_file.write(";\n")
+
+if __name__ == "__main__":
+    # Move up one folder and then into the Color_Curve_JSON folder
+    input_folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Color_Curve_JSON')
+    
+    # Save the output files in the same directory as the script
+    script_dir = os.path.dirname(__file__)
+    output_sql_file = os.path.join(script_dir, 'init.colorcurves.sql')
+    cross_ref_sql_file = os.path.join(script_dir, 'curve_file_map.sql')
+    
+    generate_sql_from_json(input_folder_path, output_sql_file, cross_ref_sql_file)
